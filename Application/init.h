@@ -28,4 +28,7 @@ void init(void);
 void initLoopControl(void);
 void PD6IntHandler(void);
 
+void setDIR(uint8_t val);
+void setPWM(void);
+
 #endif /* APPLICATION_INIT_H_ */

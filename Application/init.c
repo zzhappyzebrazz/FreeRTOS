@@ -42,10 +42,11 @@ void init(){
        //GPIO pin interrupt configure PD6
        GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_FALLING_EDGE);
        GPIOIntRegister(GPIO_PORTD_BASE, PD6IntHandler);
+       IntPrioritySet(INT_GPIOD, 5);
        GPIOIntEnable(GPIO_PORTD_BASE, GPIO_INT_PIN_6);
 
 
-       IntMasterEnable();
+      // IntMasterEnable();
        initPWM();
        initQEI();
        initLoopControl();
@@ -110,5 +111,41 @@ void initLoopControl(){
       TimerLoadSet(TIMER0_BASE, TIMER_A, (SysCtlClockGet()*dt) -1);
       IntEnable(INT_TIMER0A);
       TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+      IntPrioritySet(INT_TIMER0A, 5);
       TimerEnable(TIMER0_BASE, TIMER_A);
+}
+
+void setDIR(uint8_t val){
+   // UARTprintf("set direction \n");
+    if(val == 0)
+    {
+
+        PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, false);
+        PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, true);
+
+    }
+    else
+    {
+        PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, true);
+        PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, false);
+
+
+    }
+}
+// calibrate
+void setPWM(void){
+
+    //rescale to dutycycle %
+
+    int val = abs(u);
+    val = (val*100.0)/65535.0;
+
+    if(val < 10) val = 10;
+    if(val > 95) val = 95;
+
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 , val*Period/100);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7 , val*Period/100);
+
+//    UARTprintf("set PWM = %d", (val*Period/100));
+
 }

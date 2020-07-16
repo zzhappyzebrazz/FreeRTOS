@@ -167,9 +167,6 @@ xSemaphoreHandle Encoder_sem;
 xSemaphoreHandle PID_sem;
 xQueueHandle pos_queue = NULL;
 
-void setDIR(uint8_t val);
-void setPWM(void);
-
 extern void PD6IntHandler(void){
     GPIOIntClear(GPIO_PORTD_BASE, GPIO_INT_PIN_6);
     long task_woken = 0;
@@ -177,6 +174,9 @@ extern void PD6IntHandler(void){
     if(task_woken){
         portYIELD_FROM_ISR(task_woken);
     }
+//    portBASE_TYPE xTaskWoken = pdFALSE;
+//    xSemaphoreGiveFromISR(Encoder_sem, xTaskWoken);
+//    portEND_SWITCHING_ISR(xTaskWoken);
 }
 
 void Timer0AIntHandler(void){
@@ -186,6 +186,9 @@ void Timer0AIntHandler(void){
     if(task_woken){
         portYIELD_FROM_ISR(task_woken);
     }
+    //    portBASE_TYPE xTaskWoken = pdFALSE;
+    //    xSemaphoreGiveFromISR(PID_sem, xTaskWoken);
+    //    portEND_SWITCHING_ISR(xTaskWoken);
 }
 
 int main(void)
@@ -196,10 +199,11 @@ int main(void)
         GPIOPinConfigure(GPIO_PA0_U0RX);
         GPIOPinConfigure(GPIO_PA1_U0TX);
         GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+        IntMasterDisable();
         ConfigureUART();
         pos_queue = xQueueCreate( 10, sizeof( float ) );
         init();
-        xTaskCreate( EncoderTask, "Encoder Task", configMINIMAL_STACK_SIZE, NULL, 2, NULL );
+        xTaskCreate( EncoderTask, "Encoder Task", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
         xTaskCreate( PIDTask,   "PID Task ", configMINIMAL_STACK_SIZE, NULL, 1, NULL );
 //        xTaskCreate( LEDGreenTask, "LEDTask 3", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
         vTaskStartScheduler();
@@ -212,6 +216,7 @@ static void EncoderTask(void *pvParameters)
 {
     while (1)
     {
+        taskENTER_CRITICAL();
         if(xSemaphoreTake(Encoder_sem,portMAX_DELAY))
         {
             pos = QEIPositionGet(QEI0_BASE);
@@ -228,23 +233,24 @@ static void EncoderTask(void *pvParameters)
                 {
                     UARTprintf("DONT MOVE\n");
                 }
-           long ok = xQueueSend(pos_queue, &pos, 100);
+           long ok = xQueueSend(pos_queue, &pos, portMAX_DELAY);
            if(ok)
            {
                UARTprintf("queue sended");
            }
         }
+        taskEXIT_CRITICAL();
     }
 }
-
 
 static void PIDTask(void *pvParameters)
 {
     while (1)
     {
+        taskENTER_CRITICAL();
         if(xSemaphoreTake(Encoder_sem,portMAX_DELAY))
         {
-            if(xQueueReceive(pos_queue, &pos, 100))
+            if(xQueueReceive(pos_queue, &pos, portMAX_DELAY))
                 if(pos >= -2 && pos <= 2){
                         PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, false);
                         PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, false);
@@ -288,39 +294,7 @@ static void PIDTask(void *pvParameters)
                        }
                     }
         }
+        taskEXIT_CRITICAL();
     }
 }
-void setDIR(uint8_t val){
-   // UARTprintf("set direction \n");
-    if(val == 0)
-    {
 
-        PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, false);
-        PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, true);
-
-    }
-    else
-    {
-        PWMOutputState(PWM1_BASE, PWM_OUT_7_BIT, true);
-        PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, false);
-
-
-    }
-}
-// calibrate
-void setPWM(void){
-
-    //rescale to dutycycle %
-
-    int val = abs(u);
-    val = (val*100.0)/65535.0;
-
-    if(val < 10) val = 10;
-    if(val > 95) val = 95;
-
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6 , val*Period/100);
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_7 , val*Period/100);
-
-//    UARTprintf("set PWM = %d", (val*Period/100));
-
-}
